@@ -1,65 +1,62 @@
-from flask import Flask, jsonify
 import requests
-import os
-from bs4 import BeautifulSoup
 
-app = Flask(__name__)
+# Your API Key
+API_KEY = "olNnH6iSyPabk6zGefAKF6J3B5VW30dCmCMSr1Wh"
+BASE_URL = "https://api.eia.gov/v2/petroleum/pri/spt/data/"
 
-# Function to scrape gas prices from a website (GasBuddy)
-def get_santa_barbara_gas_prices():
-    # Send a GET request to GasBuddy (or any other website with gas prices)
-    url = 'https://www.gasbuddy.com/gasprices/california/santa-barbara'
-    response = requests.get(url)
+# Query parameters for California (Los Angeles) gas prices
+params = {
+    "api_key": API_KEY,
+    "frequency": "annual",
+    "data[0]": "value",
+    "facets[duoarea][0]": "Y05LA",  # Los Angeles Duoarea code (for California gas prices)
+    "facets[product][0]": "EPMRR",    # Regular Gasoline Price
+    "start": "2010",
+    "end": "2024",
+    "sort[0][column]": "period",
+    "sort[0][direction]": "desc"
+}
 
-    if response.status_code != 200:
-        return {"error": "Unable to fetch data from GasBuddy"}
-
-    # Parse the HTML content using BeautifulSoup
-    soup = BeautifulSoup(response.text, 'html.parser')
-
-    # Find all the gas stations and their prices
-    gas_stations = soup.find_all('div', class_='styles__station___2zIUl')
-
-    if not gas_stations:
-        return {"error": "No gas stations found"}
-
-    prices = []
-    for station in gas_stations:
-        # Extract station name
-        station_name = station.find('span', class_='styles__name___3LIl7')
-        if station_name:
-            station_name = station_name.get_text(strip=True)
+def fetch_california_gas_prices():
+    try:
+        # Perform the API request
+        response = requests.get(BASE_URL, params=params)
+        print("Request URL:", response.url)  # Debugging: print full request URL
+        
+        if response.status_code == 200:
+            # Parse the JSON response
+            data = response.json()
+            print("Full API Response:", data)  # Debugging: print the entire response
+            return data.get("response", {}).get("data", [])
         else:
-            station_name = "Unknown"
+            # Print error details
+            print(f"Error: {response.status_code}")
+            print("Response Text:", response.text)
+            return []
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return []
 
-        # Extract price
-        price = station.find('span', class_='styles__price___16z44')
-        if price:
-            price = price.get_text(strip=True)
-        else:
-            price = "N/A"
-
-        # Append to list
-        prices.append({
-            'station_name': station_name,
-            'price': price
-        })
-
-    return prices
-
-@app.route('/')
-def index():
-    return "Welcome to the Gas Price API!"
-
-@app.route('/gasprices/santa-barbara', methods=['GET'])
-def get_santa_barbara_gas_prices_route():
-    # Get the gas prices
-    gas_prices = get_santa_barbara_gas_prices()
-
-    if "error" in gas_prices:
-        return jsonify(gas_prices), 500
-    else:
-        return jsonify(gas_prices)
+def print_california_gas_prices(prices):
+    if not prices:
+        print("No gas prices to display.")
+        return
+    
+    print("California Annual Gas Prices (Los Angeles):")
+    for record in prices:
+        year = record.get("period", "N/A")
+        value = record.get("value", "N/A")
+        value = float(value)
+        local_tax = value * 0.0225;
+        adjusted_price = value + 0.85 + 0.10 + 0.30 + local_tax
+        print(f"Year: {year}, Price: {adjusted_price:.3f}")
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))  # Changed to port 3000 for Replit
+    # Fetch and print gas prices for California (Los Angeles)
+    gas_prices = fetch_california_gas_prices()
+    
+    # Print gas prices
+    if gas_prices:
+        print_california_gas_prices(gas_prices)
+    else:
+        print("No data fetched from the API.")
